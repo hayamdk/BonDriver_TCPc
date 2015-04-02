@@ -476,10 +476,17 @@ void parse_channel_list(HINSTANCE hinstDLL)
 		if (sps[0].spname == NULL) {
 			sps[0].spname = _wcsdup(L"");
 		}
+		fclose(fp);
+		n_sps = sp + 1;
 	} else {
-		MessageBox(NULL, L"チャンネルリストを読み込めません", L"ERROR!", MB_OK);
+		MessageBox(NULL, L"チャンネルリストを読み込めません", L"BonDriver_TCPc", MB_OK);
+		sps[0].spname = _wcsdup(L"SPACE1");
+		sps[0].n_chs = 1;
+		sps[0].chs[0].chname = _wcsdup(L"127.0.0.1:1234");
+		sps[0].chs[0].addr.S_un.S_addr = inet_addr("127.0.0.1");
+		sps[0].chs[0].port = htons(1234);
+		n_sps = 1;
 	}
-	n_sps = sp + 1;
 }
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
