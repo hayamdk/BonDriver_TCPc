@@ -6,8 +6,8 @@
 
 #include <winsock2.h>
 #include <Windows.h>
-#include <sys/timeb.h>
-#include <time.h>
+//#include <sys/timeb.h>
+//#include <time.h>
 #include <shlwapi.h>
 #include <stdio.h>
 #include <locale.h>
@@ -22,7 +22,7 @@
 
 WCHAR *chlist_ext = L".ChSet.txt";
 
-static inline __int64 gettime()
+/*static inline __int64 gettime()
 {
 	__int64 result;
 	_timeb tv;
@@ -30,7 +30,7 @@ static inline __int64 gettime()
 	result = (__int64)tv.time * 1000;
 	result += tv.millitm;
 	return result;
-}
+}*/
 
 typedef struct{
 	WCHAR *chname;
@@ -286,15 +286,36 @@ void CTCPcTuner::recv_from_server()
 
 const DWORD CTCPcTuner::WaitTsStream(const DWORD dwTimeOut)
 {
-	__int64 orig_time = gettime();
-	while ( buf_filled == buf_pos ) {
-		if ( gettime() >= orig_time + dwTimeOut ) {
-			return 0;
-		}
-		//Sleep(1);
-		recv_from_server();
+	int ret;
+	fd_set fds;
+	struct timeval tv;
+
+	if (connect_failed) {
+		return WAIT_ABANDONED;
 	}
-	return 1;
+
+	if (!connected) {
+		connect_to_server();
+	}
+
+	tv.tv_sec = dwTimeOut/1000;
+	tv.tv_usec = dwTimeOut%1000;
+
+	FD_ZERO(&fds);
+	FD_SET(sock, &fds);
+
+	ret = select(0, &fds, NULL, NULL, &tv);
+
+	if ( ret == 1) {
+		/* 時間内にデータが到着した */
+		recv_from_server();
+		return WAIT_OBJECT_0;
+	} else if ( ret == 0 ) {
+		/* タイムアウト */
+		return WAIT_TIMEOUT;
+	}
+	/* エラー */
+	return WAIT_FAILED;
 }
 
 const DWORD CTCPcTuner::GetReadyCount()
