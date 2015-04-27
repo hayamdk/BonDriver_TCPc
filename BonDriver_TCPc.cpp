@@ -98,7 +98,6 @@ private:
 	int curr_sp;
 	int curr_ch;
 
-protected:
 	void minimize_buf();
 	void recv_from_server();
 	void connect_to_server();
@@ -129,15 +128,16 @@ CTCPcTuner::~CTCPcTuner()
 
 const BOOL CTCPcTuner::OpenTuner()
 {
+	if (opened) {
+		return FALSE;
+	}
 	opened = 1;
 	return TRUE;
 }
 
 void CTCPcTuner::CloseTuner()
 {
-	if (connected) {
-		disconnect_from_server();
-	}
+	disconnect_from_server();
 	opened = 0;
 }
 
@@ -224,13 +224,49 @@ void CTCPcTuner::connect_to_server()
 	connect_failed = 1;
 }
 
+static void send_end_msg(SOCKET sock)
+{
+	int ret;
+	while (1) {
+		/* 1文字送る = 終了の合図 */
+		ret = send(sock, "A", 1, 0);
+		if (ret == SOCKET_ERROR) {
+			if (WSAGetLastError() != WSAEWOULDBLOCK) {
+				/* sendがブロック以外の何らかのエラーで失敗したので終了 */
+				break;
+			}
+		} else {
+			/* sendに成功したので終了 */
+			break;
+		}
+	}
+}
+
+static void wait_endof_socket(SOCKET sock)
+{
+	int ret;
+	char tmpbuf[MSG_SIZE];
+	while (1) {
+		ret = recv(sock, tmpbuf, MSG_SIZE, 0);
+		if (ret == SOCKET_ERROR) {
+			if (WSAGetLastError() != WSAEWOULDBLOCK) {
+				/* recvがブロック以外の何らかのエラーで失敗したので終了 */
+				return;
+			}
+		} else if ( ret == 0 ) {
+			/* ソケットのEOFなので終了 */
+			return;
+		}
+	}
+}
+
 void CTCPcTuner::disconnect_from_server()
 {
 	//MessageBox(NULL, L"disconnect!", L"", MB_OK);
 
 	if (connected) {
-		send(sock, "A", 1, 0);
-		Sleep(100);
+		send_end_msg(sock);
+		wait_endof_socket(sock);
 		shutdown(sock, SD_BOTH);
 		closesocket(sock);
 		WSACleanup();
@@ -337,29 +373,38 @@ const BOOL CTCPcTuner::GetTsStream(BYTE *pDst, DWORD *pdwSize, DWORD *pdwRemain)
 
 const BOOL CTCPcTuner::GetTsStream(BYTE **pDst, DWORD *pdwSize, DWORD *pdwRemain)
 {
+	int remain;
+
 	recv_from_server();
+	remain = buf_filled - buf_pos;
 
 	*pDst = buf;
 
-	if (buf_filled < MSG_SIZE) {
+	if (remain < MSG_SIZE) {
 		*pdwSize = 0;
 		*pdwRemain = 0;
 		return FALSE;
 	}
 
-	buf_pos = MSG_SIZE;
+	buf_pos += MSG_SIZE;
 	*pdwSize = MSG_SIZE;
-	*pdwRemain = (buf_filled - buf_pos) / MSG_SIZE;
+	*pdwRemain = remain / MSG_SIZE;
 
 	return TRUE;
 }
 
 void CTCPcTuner::PurgeTsStream()
 {
+	buf_filled = 0;
+	buf_pos = 0;
 }
 
 void CTCPcTuner::Release()
 {
+	if (opened) {
+		CloseTuner();
+	}
+	free(buf);
 }
 
 LPCTSTR CTCPcTuner::GetTunerName()
