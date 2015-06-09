@@ -45,7 +45,7 @@ typedef struct{
 } sp_info_t;
 
 int n_sps = 0;
-sp_info_t sps[MAX_CHANNEL_NUM];
+sp_info_t sps[MAX_SPACE_NUM];
 
 class CTCPcTuner : public IBonDriver2
 {
