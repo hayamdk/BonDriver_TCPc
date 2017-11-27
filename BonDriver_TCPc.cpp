@@ -12,6 +12,8 @@
 #include <stdio.h>
 #include <locale.h>
 
+#include "resource.h"
+
 #include "IBonDriver.h"
 #include "IBonDriver2.h"
 
@@ -465,6 +467,57 @@ const DWORD CTCPcTuner::GetCurChannel(void)
 	return curr_ch;
 }
 
+INT_PTR CALLBACK DlgProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lParam)
+{
+	WCHAR server_str[32];
+	char server_mbstr[32];
+	WCHAR port_str[16];
+	WCHAR chname[48];
+	int port;
+
+	static HWND update_wnds[3] = { NULL, NULL, NULL };
+
+	switch(Msg) {
+		case WM_INITDIALOG:
+			SetDlgItemText(hDlg, IDC_EDIT_SERVER, L"127.0.0.1");
+			SetDlgItemText(hDlg, IDC_EDIT_PORT, L"1234");
+			update_wnds[0] = GetDlgItem(hDlg, IDC_EDIT_SERVER);
+			update_wnds[1] = GetDlgItem(hDlg, IDC_EDIT_PORT);
+			update_wnds[2] = GetDlgItem(hDlg, IDOK);
+			return TRUE;
+		case WM_COMMAND:
+			switch(LOWORD(wParam)) {
+				case IDCANCEL:
+				case IDOK:
+					goto END;
+			}
+			break;
+		case WM_CLOSE:
+			goto END;
+		case WM_PAINT:
+			/* ダイアログの更新描画を独自に行う(TVTest用のワークアラウンド) */
+			UpdateWindow(update_wnds[0]);
+			UpdateWindow(update_wnds[1]);
+			UpdateWindow(update_wnds[2]);
+			return TRUE;
+	}
+    return FALSE;
+END:
+	GetDlgItemText(hDlg, IDC_EDIT_SERVER, server_str, 32-1);
+	GetDlgItemText(hDlg, IDC_EDIT_PORT, port_str, 16-1);
+	port = _wtoi(port_str);
+	sps[0].spname = _wcsdup(L"SPACE1");
+	sps[0].n_chs = 1;
+	swprintf_s(chname, 48-1, L"%s:%d", server_str, port);
+	wcstombs(server_mbstr, server_str, 32-1);
+	sps[0].chs[0].chname = _wcsdup(chname);
+	sps[0].chs[0].addr.S_un.S_addr = inet_addr(server_mbstr);
+	sps[0].chs[0].port = htons(port);
+	n_sps = 1;
+	EndDialog(hDlg, 0);
+	return TRUE;
+}
+
 void parse_channel_list(HINSTANCE hinstDLL)
 {
 	WCHAR path[MAX_PATH+1];
@@ -545,13 +598,7 @@ void parse_channel_list(HINSTANCE hinstDLL)
 		fclose(fp);
 		n_sps = sp + 1;
 	} else {
-		MessageBox(NULL, L"チャンネルリストを読み込めません", L"BonDriver_TCPc", MB_OK);
-		sps[0].spname = _wcsdup(L"SPACE1");
-		sps[0].n_chs = 1;
-		sps[0].chs[0].chname = _wcsdup(L"127.0.0.1:1234");
-		sps[0].chs[0].addr.S_un.S_addr = inet_addr("127.0.0.1");
-		sps[0].chs[0].port = htons(1234);
-		n_sps = 1;
+		DialogBox(hinstDLL, MAKEINTRESOURCE(IDD_DIALOG1), NULL, DlgProc);
 	}
 }
 
